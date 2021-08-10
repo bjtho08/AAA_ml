@@ -1,0 +1,133 @@
+############################################
+#          AAA_image_segmentation          #
+#               Config file                #
+#          Author: Bjarne Thorsted         #
+#      e-mail: bthorsted@health.sdu.dk     #
+############################################
+
+appName: AAAml
+
+# Options for modifying app behavior during runtime
+Runtime:
+  clean_start: false
+  compute_stats: false
+  compute_class_weights: false
+  date_string: &date "2021-06-10" # if null, always use current date
+  debug: true
+  make_abundance_table: false
+  run_grid_search: false
+  run_train: true
+  run_predict: true
+  run_eval: false
+  analyze: false
+  create_probability_maps: false
+
+data:
+  input_ext:  "tif"
+  target_ext: "png"
+  path:       "data/"
+  wsi:        "data/WSI/"
+  train:      "data/training/"
+  val:        "data/validation/"
+  test:       "data/testing/"
+  analysis:    "data/analysis"
+  models:     "models/"
+  weights:    "weights/"
+  logs:       "logs/"
+  results:    "results/"
+  grid:       "talos/"
+  val_list:
+    - "3295 5V AAA WEIGERT - 2020-02-27 17.20.54"
+    - "4458 5V AAA WEIGERT - 2020-02-27 18.29.59"
+
+class_map:
+  None:     0
+  Ignore*:  1
+  Zone 1:   2
+  Zone 2:   3
+  Thrombus: 4
+  Background: 5
+
+class_colors:
+  0: [  0,   0,   0]
+  1: [180, 180, 180]
+  2: [  0,   0, 255]
+  3: [  0, 255,   0]
+  4: [255,   0,   0]
+  5: [189,   0, 189]
+
+active_labels: [1, 2, 3, 4, 5]
+ignore_cls: null # change back to 1 if necessary
+
+stats:
+  train_m: [210.09353303, 195.76254423, 202.24596544] # Data set mean
+  train_s: [32.57548815, 52.9416059 , 42.13756971] # Data set standard deviation
+  pred_m: [220.08576063, 206.87617786, 224.27487422] # Analysis data set mean
+  pred_s: [37.6808387 , 52.17449858, 49.02556889] # Analysis data set standard deviation
+  x_min:   [1., 1., 1.] # Data set minimum value - always zero for 8-bit
+  x_max:   [255., 255., 255.] # Data set maximum value - always 255 for 8-bit
+
+input_meta:
+  x: &x 384
+  y: &y 384
+  channels: &ch 3
+  tile_size: [*x, *y] # Tile dimension in pixels
+  shape: &shape [null, null, *ch]
+
+# deep learning model
+batch_size: &batch_size 16
+nb_epoch: &nb_epoch 300
+nb_frozen: &nb_frozen 0
+verbose: &verbose 0
+drop: &drop 0 # Dropout
+
+# model_kwargs
+nb_filters_0: &nf0 64 # Base number of filters
+sigma_noise: &sn 0.01 # Gaussian noise strength
+depth: 4
+maxpool: false
+initialization: "he_normal"
+activation: "swish"
+dropout: 0
+output_channels: 5
+batchnorm: True
+arch: "U-Net"
+
+statics:
+  shape: *shape
+  nb_epoch: *nb_epoch
+  #nb_frozen: *nb_frozen
+  nb_filters_0: *nf0
+  batch_size: *batch_size
+  verbose: *verbose
+  num_cls: 4
+  batchnorm: True
+  maxpool: false
+  #date: *date
+  opt: "adam"
+  depth: 4
+  arch: "U-Net"
+  dropout: *drop
+  decay: 0.0
+  sigma_noise: *sn
+  act: 'swish'
+  pretrain: 1
+  lr: 1.0e-4
+  class_weights: False
+  loss_func: "cat_FL"
+  init: "he_normal"
+
+
+grid_params:
+  #dropout: [0]
+  #decay: [0.0]
+  #lr: [1e-3, 1e-4, 1e-5]
+  #sigma_noise: [0]
+  nb_filters_0: [12, 16, 32, 64]
+  depth: [2, 3, 4]
+  #class_weights: [True, False]
+  loss_func: ["tversky_loss"] #, "cat_CE", "cat_FL"]
+  arch: ["U-Net"]
+  act: ["swish"] #, "relu"]
+  opt: ["adam",]
+  init: ["he_normal",] # "glorot_uniform"]
