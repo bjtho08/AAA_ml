@@ -82,25 +82,14 @@ verbose: &verbose 0
 drop: &drop 0 # Dropout
 
 # model_kwargs
-nb_filters_0: &nf0 64 # Base number of filters
-sigma_noise: &sn 0.01 # Gaussian noise strength
-depth: 4
-maxpool: false
-initialization: "he_normal"
-activation: "swish"
-dropout: 0
-output_channels: 5
-batchnorm: True
-arch: "U-Net"
-
 statics:
   shape: *shape
   nb_epoch: *nb_epoch
   #nb_frozen: *nb_frozen
-  nb_filters_0: *nf0
+  nb_filters_0: 64 # Base number of filters
   batch_size: *batch_size
   verbose: *verbose
-  num_cls: 4
+  num_cls: 5
   batchnorm: True
   maxpool: false
   #date: *date
@@ -109,12 +98,12 @@ statics:
   arch: "U-Net"
   dropout: *drop
   decay: 0.0
-  sigma_noise: *sn
+  sigma_noise: 0.01 # Gaussian noise strength
   act: 'swish'
   pretrain: 1
   lr: 1.0e-4
   class_weights: False
-  loss_func: "cat_FL"
+  loss_func: "jaccard2_loss"
   init: "he_normal"
 
 

@@ -32,6 +32,9 @@ from tf_mmciad.model.layers import MyConv2D
 from tf_mmciad.utils.custom_loss import (
     categorical_focal_loss,
     jaccard1_coef,
+    jaccard2_coef,
+    jaccard1_loss,
+    jaccard2_loss,
     tversky_loss,
     weighted_loss,
 )
@@ -71,6 +74,36 @@ class Parameters:
     cls_wgts: Dict[int, float] = None
     train_ids: List[str] = None
     val_ids: List[str] = None
+
+@dataclass
+class CustomObjects:
+    """Class customObjects to be used for loading previously trained models.
+    """
+    layers = {
+        "MyConv2D": MyConv2D,
+        "Swish": Swish,
+    }
+    losses = {
+        "cat_CE": categorical_crossentropy,
+        "tversky_loss": tversky_loss,
+        "categorical_focal_loss_fixed": categorical_focal_loss(),
+        "cat_FL": categorical_focal_loss(),
+        "jaccard1_loss": jaccard1_loss,
+        "jaccard1_loss": jaccard2_loss,
+    }
+    metrics = {
+        "jaccard1_coef": jaccard1_coef,
+        "jaccard2_coef": jaccard2_coef,
+    }
+
+
+    def get(self) -> dict:
+        """Get a dict containing the custom metrics, losses and layers specified above.
+
+        Returns:
+            dict
+        """
+        return {**self.metrics, **self.losses, **self.layers}
 
 
 def get_filename(path: Union[str, Path]) -> str:
@@ -229,23 +262,38 @@ def execute_single_train(config, rt, paths, params, tb_callback_params):
 
 
 def execute_predict(
-    paths,
-    rt,
-    patient_val_ids,
+    paths: confuse.AttrDict,
+    rt: confuse.AttrDict,
+    patient_val_ids: List[str],
     params: Parameters,
+    custom_objects: CustomObjects,
     train_date: str,
     logger: logging.Logger,
     scan_object: ta.Scan = None,
 ):
-    """Execute the final prediction on the train_date dataset .
+    """Runs the predict and test_val_ids on the RISA dataset .
 
     Args:
+        paths ([type]): [description]
+        rt ([type]): [description]
+        patient_val_ids ([type]): [description]
+        params (Parameters): [description]
+        custom_objects (CustomObjects): [description]
         train_date (str): [description]
-        from_talos (bool, optional): [description]. Defaults to True.
+        logger (logging.Logger): [description]
+        scan_object (ta.Scan, optional): [description]. Defaults to None.
 
     Raises:
         err: [description]
     """
+    #Execute the final prediction on the train_date dataset .
+
+    #Args:
+    #    train_date (str): [description]
+    #    from_talos (bool, optional): [description]. Defaults to True.
+
+    #Raises:
+    #    err: [description]
     tmp_path = Path(paths.data, "tmp")
     input_file = sorted(Path(paths.wsi).glob("*.tif"))
     target_file = sorted(Path(paths.wsi, "gt").glob("*.png"))
@@ -253,17 +301,6 @@ def execute_predict(
     input_file = [file for file in input_file if file.stem in patient_val_ids]
     target_file = [file for file in target_file if file.stem in patient_val_ids]
     logger.info(f"{target_file = }")
-
-    cat_fl = categorical_focal_loss()
-    custom_objects = {
-        "MyConv2D": MyConv2D,
-        "Swish": Swish,
-        "cat_CE": categorical_crossentropy,
-        "tversky_loss": tversky_loss,
-        "categorical_focal_loss_fixed": cat_fl,
-        "jaccard1_coef": jaccard1_coef,
-        "cat_FL": cat_fl,
-    }
 
     if scan_object:
         sorted_models = scan_object.data.sort_values("jaccard1_coef", ascending=False)
@@ -296,14 +333,14 @@ def execute_predict(
 
             if scan_object:
                 test_model = model_from_json(
-                    scan_object.saved_models[rank], custom_objects=custom_objects
+                    scan_object.saved_models[rank], custom_objects=custom_objects.get()
                 )
                 test_model.set_weights(scan_object.saved_weights[rank])
                 test_model.compile(
                     Adam(), categorical_crossentropy, metrics=["acc", jaccard1_coef]
                 )
             else:
-                test_model = load_model(modelpath, custom_objects=custom_objects)
+                test_model = load_model(modelpath, custom_objects=custom_objects.get())
             small_batch = 4
             try:
                 for batch in chunked(slide_tiler.items(), small_batch):
@@ -398,10 +435,11 @@ def execute_predict(
 
 
 def execute_analysis(
-    paths,
-    config,
-    rt,
+    paths: confuse.AttrDict,
+    config: confuse.Configuration,
+    rt: confuse.AttrDict,
     params: Parameters,
+    custom_objects: CustomObjects,
     logger: logging.Logger,
     model_date: str,
     output_dir: str,
@@ -437,17 +475,6 @@ def execute_analysis(
     tmp_path = Path(paths.data, "tmp")
     input_files = sorted(Path(paths.analysis).glob("*.tif"))
 
-    cat_fl = categorical_focal_loss()
-    custom_objects = {
-        "MyConv2D": MyConv2D,
-        "Swish": Swish,
-        "cat_CE": categorical_crossentropy,
-        "tversky_loss": tversky_loss,
-        "categorical_focal_loss_fixed": cat_fl,
-        "jaccard1_coef": jaccard1_coef,
-        "cat_FL": cat_fl,
-    }
-
     model_path = next(Path(paths.models, model_date).glob("*val_jacc1*.h5"))
 
     for input_path in input_files:
@@ -464,7 +491,7 @@ def execute_analysis(
         tmp_slide_path = tmp_path / "results" / f"{model_date}.png"
         sys.stderr.flush()
 
-        analysis_model = load_model(model_path, custom_objects=custom_objects)
+        analysis_model = load_model(model_path, custom_objects=custom_objects.get())
         small_batch = 4
         try:
             for batch in chunked(slide_tiler.items(), small_batch):
@@ -606,26 +633,25 @@ def main():
     # if date_string is None, current date will be used
     rt: confuse.AttrDict = config.Runtime
 
-    class_map = config["class_map"].get()
+    class_map = config.class_map
 
-    class_colors = config["class_colors"].get()
+    class_colors = config.class_colors
 
-    active_labels = config["active_labels"].get()
+    active_labels = config.active_labels
     active_classes = [sorted(class_map, key=class_map.get)[i] for i in active_labels]
     print(active_classes, file=sys.stderr, flush=True)
     colorvec = np.asarray([class_colors[i] for i in active_labels])
     active_colors = {class_: class_colors[class_] for class_ in active_labels}
     print(active_colors, file=sys.stderr, flush=True)
     print(colorvec.shape, file=sys.stderr, flush=True)
-    ignore_cls = config["ignore_cls"].get()  # change back to 0 if necessary
+    ignore_cls = config.ignore_cls  # change back to 0 if necessary
 
-    paths = config["data"].get()
+    paths: confuse.AttrDict = config["data"].get()
     # "models"
+    target_ext: str = paths.target_ext
+    patient_val_ids: list = paths.val_list
 
-    target_ext = paths["target_ext"]
-    patient_val_ids = paths["val_list"]
-
-    tile_size = (*config["input_meta"]["tile_size"].get(),)
+    tile_size = (*config.input_meta.tile_size,)
 
     logger = logging.getLogger(__name__)
     c_handler = logging.StreamHandler(sys.stderr)
@@ -844,6 +870,8 @@ def main():
         val_ids=val_ids,
     )
 
+    custom_objects = CustomObjects()
+
     ###################################################################################
 
     if rt.run_grid_search:
@@ -867,7 +895,7 @@ def main():
 
         if not rt.run_grid_search and rt.run_train:
             execute_predict(
-                paths, rt, patient_val_ids, pred_params, rt.date_string, logger
+                paths, rt, patient_val_ids, pred_params, custom_objects, rt.date_string, logger
             )
         elif rt.run_grid_search and not rt.run_train:
             try:
@@ -882,6 +910,7 @@ def main():
                     rt,
                     patient_val_ids,
                     pred_params,
+                    custom_objects,
                     rt.date_string,
                     logger,
                     scan_object=scan_object,
@@ -899,7 +928,7 @@ def main():
             raise ValueError("Model date must be supplied for analysis!")
 
         execute_analysis(
-            paths, config, rt, analyse_params, logger, rt.date_string, paths.results
+            paths, config, rt, analyse_params, custom_objects, logger, rt.date_string, paths.results
         )
 
 
