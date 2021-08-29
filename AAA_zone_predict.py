@@ -60,6 +60,7 @@ import talos as ta
 class Parameters:
     """Set parameters for training .
     """
+
     x_min: int = 1
     x_max: int = 255
     mean: Union[List[int], np.ndarray] = None
@@ -75,10 +76,12 @@ class Parameters:
     train_ids: List[str] = None
     val_ids: List[str] = None
 
+
 @dataclass
 class CustomObjects:
     """Class customObjects to be used for loading previously trained models.
     """
+
     layers = {
         "MyConv2D": MyConv2D,
         "Swish": Swish,
@@ -89,13 +92,12 @@ class CustomObjects:
         "categorical_focal_loss_fixed": categorical_focal_loss(),
         "cat_FL": categorical_focal_loss(),
         "jaccard1_loss": jaccard1_loss,
-        "jaccard1_loss": jaccard2_loss,
+        "jaccard2_loss": jaccard2_loss,
     }
     metrics = {
         "jaccard1_coef": jaccard1_coef,
         "jaccard2_coef": jaccard2_coef,
     }
-
 
     def get(self) -> dict:
         """Get a dict containing the custom metrics, losses and layers specified above.
@@ -286,13 +288,13 @@ def execute_predict(
     Raises:
         err: [description]
     """
-    #Execute the final prediction on the train_date dataset .
+    # Execute the final prediction on the train_date dataset .
 
-    #Args:
+    # Args:
     #    train_date (str): [description]
     #    from_talos (bool, optional): [description]. Defaults to True.
 
-    #Raises:
+    # Raises:
     #    err: [description]
     tmp_path = Path(paths.data, "tmp")
     input_file = sorted(Path(paths.wsi).glob("*.tif"))
@@ -895,7 +897,13 @@ def main():
 
         if not rt.run_grid_search and rt.run_train:
             execute_predict(
-                paths, rt, patient_val_ids, pred_params, custom_objects, rt.date_string, logger
+                paths,
+                rt,
+                patient_val_ids,
+                pred_params,
+                custom_objects,
+                rt.date_string,
+                logger,
             )
         elif rt.run_grid_search and not rt.run_train:
             try:
@@ -928,7 +936,14 @@ def main():
             raise ValueError("Model date must be supplied for analysis!")
 
         execute_analysis(
-            paths, config, rt, analyse_params, custom_objects, logger, rt.date_string, paths.results
+            paths,
+            config,
+            rt,
+            analyse_params,
+            custom_objects,
+            logger,
+            rt.date_string,
+            paths.results,
         )
 
 
