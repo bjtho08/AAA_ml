@@ -9,15 +9,15 @@ appName: AAAml
 
 # Options for modifying app behavior during runtime
 Runtime:
-  clean_start: false
-  compute_stats: true
+  clean_start: true
+  compute_stats: false
   compute_class_weights: false
-  date_string: &date "2021-06-10" # if null, always use current date
+  date_string: &date "2021-10-03" # if null, always use current date
   debug: false
   make_abundance_table: false
   run_grid_search: false
-  run_train: false
-  run_predict: false
+  run_train: true
+  run_predict: true
   run_eval: false
   analyze: true
   create_probability_maps: false
@@ -25,7 +25,7 @@ Runtime:
 data:
   input_ext:  "tif"
   target_ext: "png"
-  path:       "data/"
+  data:       "data/"
   wsi:        "data/WSI/"
   train:      "data/training/"
   val:        "data/validation/"
@@ -49,23 +49,23 @@ class_map:
   Background: 5
 
 class_colors:
-  0: [  0,   0,   0]
+  0: [180, 180, 180]
   1: [180, 180, 180]
   2: [  0,   0, 255]
   3: [  0, 255,   0]
   4: [255,   0,   0]
-  5: [189,   0, 189]
+  5: [139,  21, 166]
 
-active_labels: [1, 2, 3, 4, 5]
+active_labels: [0, 1, 2, 3, 4, 5]
 ignore_cls: null # change back to 1 if necessary
 
 stats:
-  train_m: [210.09353303, 195.76254423, 202.24596544] # Data set mean
-  train_s: [32.57548815, 52.9416059 , 42.13756971] # Data set standard deviation
-  pred_m: [200.0, 200.0, 200.0] # Analysis data set mean
-  pred_s: [30.0, 50.0, 40.0] # Analysis data set standard deviation
+  train_m: [216.62469449, 204.54379355, 207.21439871] # Data set mean
+  train_s: [29.14629049, 47.60279847, 37.28980667] # Data set standard deviation
+  pred_m: [220.08576063, 206.87617786, 224.27487422] # Analysis data set mean
+  pred_s: [37.6808387 , 52.17449858, 49.02556889] # Analysis data set standard deviation
   x_min:   [1., 1., 1.] # Data set minimum value - always zero for 8-bit
-  x_max:   [255., 255., 255.] # Data set maximum value - always 255 for 8-bit
+  x_max:   [242., 235., 240.] # Data set maximum value - always 255 for 8-bit
 
 input_meta:
   x: &x 384
@@ -76,45 +76,34 @@ input_meta:
 
 # deep learning model
 batch_size: &batch_size 16
-nb_epoch: &nb_epoch 300
+nb_epoch: &nb_epoch 100
 nb_frozen: &nb_frozen 0
 verbose: &verbose 0
 drop: &drop 0 # Dropout
 
 # model_kwargs
-nb_filters_0: &nf0 64 # Base number of filters
-sigma_noise: &sn 0.01 # Gaussian noise strength
-depth: 4
-maxpool: false
-initialization: "he_normal"
-activation: "swish"
-dropout: 0
-output_channels: 5
-batchnorm: True
-arch: "U-Net"
-
 statics:
   shape: *shape
   nb_epoch: *nb_epoch
   #nb_frozen: *nb_frozen
-  nb_filters_0: *nf0
+  nb_filters_0: 32 # Base number of filters
   batch_size: *batch_size
   verbose: *verbose
-  num_cls: 4
+  num_cls: 6
   batchnorm: True
   maxpool: false
   #date: *date
   opt: "adam"
-  depth: 4
+  depth: 3
   arch: "U-Net"
   dropout: *drop
   decay: 0.0
-  sigma_noise: *sn
+  sigma_noise: 0.01 # Gaussian noise strength
   act: 'swish'
   pretrain: 1
   lr: 1.0e-4
   class_weights: False
-  loss_func: "cat_FL"
+  loss_func: "jaccard2_loss"
   init: "he_normal"
 
 

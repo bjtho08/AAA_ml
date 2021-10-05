@@ -12,7 +12,7 @@ from datetime import date
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import copyfile
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import confuse
 import numpy as np
@@ -127,28 +127,37 @@ def file_counter(path: Path) -> int:
         return len([name for name in path.iterdir() if name.is_file()])
     return 0
 
+def rewrite_config_flag(flag: str = "clean_start", state: bool = False):
+    """Rewrite the config.yaml file with the given flag and state.
 
-def write_to_config(subs: Dict[str, float]):
-    """Writes a dictionary of configuration values to a config.yaml file
+    Args:
+        flag (str, optional): name of the config flag. Defaults to "clean_start".
+        state (bool, optional): flag state to be written. Defaults to False.
+    """
+    copyfile("config.yaml", "config.yaml.backup")
+    with fileinput.FileInput("config.yaml", inplace=True) as inputfile:
+        for line in inputfile:
+            print(re.sub(r"(?<=" + flag + r": )(true|false)", str(state).lower(), line.rstrip()))
+
+def write_to_config(subs: Optional[Dict[str, float]]=None):
+    """Writes a dictionary of configuration values to a config.yaml file and sets
 
     Args:
         subs (Dict[str, float]): key-value pairs for data set statistics to be written
             to config
     """
-    copyfile("config.yaml", "config.yaml.backup")
-    with fileinput.FileInput("config.yaml", inplace=True) as inputfile:
-        for line in inputfile:
-            print(re.sub(r"(?<=clean_start: )true", "false", line.rstrip()))
-    for key, val in subs.items():
-        pattern = re.compile(r"(?<=" + key + r":)([ ]+)([\[0-9\., \-\]]+)(?= #)")
-        with fileinput.FileInput("config.yaml", inplace=True) as inputfile:
-            for line in inputfile:
-                line = re.sub(
-                    pattern,
-                    r"\g<1>" + np.array2string(val, separator=", ").replace("\n", ""),
-                    line.rstrip(),
-                )
-                print(line)
+    rewrite_config_flag("clean_start", False)
+    if subs:
+        for key, val in subs.items():
+            pattern = re.compile(r"(?<=" + key + r":)([ ]+)([\[0-9\., \-\]]+)(?= #)")
+            with fileinput.FileInput("config.yaml", inplace=True) as inputfile:
+                for line in inputfile:
+                    line = re.sub(
+                        pattern,
+                        r"\g<1>" + np.array2string(val, separator=", ").replace("\n", ""),
+                        line.rstrip(),
+                    )
+                    print(line)
 
 
 def npa2s(arr, *args, **kwargs):
@@ -177,7 +186,7 @@ def predefined_datagenerator(
         params.x_min,
         params.x_max,
         batch_size=params.batch_size,
-        dim=params.tile_size,
+        dim=params.dim,
         n_channels=params.n_channels,
         n_classes=params.n_classes,
         shuffle=True,
@@ -186,13 +195,13 @@ def predefined_datagenerator(
     )
 
 
-def execute_grid_search(config, rt, paths, params, tb_callback_params):
+def execute_grid_search(config, rt, paths, params, tb_callback_params, logger: logging.Logger):
     """Execute a grid search on the training data .
 
     Returns:
         [TalosModel]: [description]
     """
-
+    logger.info("Running 'execute_grid_search' branch ...")
     train_generator = predefined_datagenerator(
         paths.train, params=params, id_list=params.train_ids
     )
@@ -200,9 +209,9 @@ def execute_grid_search(config, rt, paths, params, tb_callback_params):
         paths.train, params=params, augment=False, id_list=params.val_ids
     )
 
-    statics = config["statics"].get()
+    statics = config["statics"]
     statics["date"] = rt.date_string
-    grid_params = config["grid_params"].get()
+    grid_params = config["grid_params"]
 
     talos_model = TalosModel(
         paths.models,
@@ -234,19 +243,20 @@ def execute_grid_search(config, rt, paths, params, tb_callback_params):
     return scan_obj
 
 
-def execute_single_train(config, rt, paths, params, tb_callback_params):
+def execute_single_train(config, rt, paths, params, tb_callback_params, logger: logging.Logger):
     """Execute a single train and return a model and history .
 
     Returns:
         [type]: [description]
     """
+    logger.info("Running 'execute_single_train' branch ...")
     train_generator = predefined_datagenerator(
         paths.train, params=params, id_list=params.train_ids
     )
     val_generator = predefined_datagenerator(
         paths.train, params=params, augment=False, id_list=params.val_ids
     )
-    statics = config["statics"].get()
+    statics = config["statics"]
     statics["date"] = rt.date_string
     train_model, history = single_run(
         paths.models,
@@ -296,6 +306,7 @@ def execute_predict(
 
     # Raises:
     #    err: [description]
+    logger.info("Running 'execute_predict' branch ...")
     tmp_path = Path(paths.data, "tmp")
     input_file = sorted(Path(paths.wsi).glob("*.tif"))
     target_file = sorted(Path(paths.wsi, "gt").glob("*.png"))
@@ -353,9 +364,8 @@ def execute_predict(
                     for (save_path, _), pred_tile in zip(batch, prediction):
                         tifffile.imwrite(
                             save_path,
-                            np.moveaxis(pred_tile, -1, 0),
-                            photometric="minisblack",
-                            metadata={"axes": "CXY"},
+                            pred_tile,
+                            metadata={"axes": "XYC"},
                         )
             except ValueError:
                 logger.info("Prediction already complete!")
@@ -460,13 +470,14 @@ def execute_analysis(
     Raises:
         err: [description]
     """
+    logger.info("Running 'execute_analysis' branch ...")
     if rt.compute_stats:
         pred_m, pred_s, *_ = calculate_stats(path=paths.analysis, prefix="")
         pred_stats = {"pred_m": pred_m, "pred_s": pred_s}
         write_to_config(pred_stats)
     else:
-        pred_m = np.array(config["stats"]["pred_m"].get())
-        pred_s = np.array(config["stats"]["pred_s"].get())
+        pred_m = np.array(config["stats"]["pred_m"])
+        pred_s = np.array(config["stats"]["pred_s"])
 
     print(
         f"Dataset\n-------\nMean:    {npa2s(pred_m, separator=', '):}\n",
@@ -629,8 +640,77 @@ def main():
 
     ###################################
 
+    template = {
+        'appName': str,
+        'Runtime': {
+            'clean_start': bool,
+            'compute_stats': bool,
+            'compute_class_weights': bool,
+            'date_string': str,
+            'debug': bool,
+            'make_abundance_table': bool,
+            'run_grid_search': bool,
+            'run_train': bool,
+            'run_predict': bool,
+            'run_eval': bool,
+            'analyze': bool,
+            'create_probability_maps': bool,
+        },
+        'data': confuse.MappingValues(confuse.OneOf([str, confuse.Sequence([str])])),
+        'class_map': confuse.MappingValues(int),
+        'class_colors': confuse.MappingValues(confuse.Sequence([int])),
+        'active_labels': confuse.Sequence([int]),
+        'ignore_cls': confuse.Optional(int, default=None),
+        'stats': confuse.MappingValues(confuse.Sequence([float])),
+        'input_meta': {
+            'x': int,
+            'y': int,
+            'channels': int,
+            'tile_size': confuse.Sequence([int]),
+            'shape': confuse.Sequence([confuse.Optional(int, default=None)]),
+        },
+        'batch_size': int,
+        'nb_epoch': int,
+        'nb_frozen': int,
+        'verbose': int,
+        'drop': int,
+        'statics': {
+            'shape': confuse.Sequence([confuse.Optional(int, default=None)]),
+            'nb_epoch': int,
+            'nb_filters_0': int,
+            'batch_size': int,
+            'verbose': int,
+            'num_cls': int,
+            'batchnorm': bool,
+            'maxpool': bool,
+            'opt': str,
+            'depth': int,
+            'arch': str,
+            'dropout': float,
+            'decay': float,
+            'sigma_noise': float,
+            'act': str,
+            'pretrain': int,
+            'lr': float,
+            'class_weights': bool,
+            'loss_func': str,
+            'init': str,
+        },
+        'grid_params': {
+            'nb_filters_0': confuse.Sequence([int]),
+            'depth': confuse.Sequence([int]),
+            'loss_func': confuse.Sequence([str]),
+            'arch': confuse.Sequence([str]),
+            'act': confuse.Sequence([str]),
+            'opt': confuse.Sequence([str]),
+            'init': confuse.Sequence([str]),
+        }
+    }
+
     config = confuse.Configuration("AAAml", __name__)
     config.set_file("config.yaml")
+    config = config.get(template)
+    
 
     # if date_string is None, current date will be used
     rt: confuse.AttrDict = config.Runtime
@@ -648,7 +728,7 @@ def main():
     print(colorvec.shape, file=sys.stderr, flush=True)
     ignore_cls = config.ignore_cls  # change back to 0 if necessary
 
-    paths: confuse.AttrDict = config["data"].get()
+    paths = confuse.AttrDict(config.data)
     # "models"
     target_ext: str = paths.target_ext
     patient_val_ids: list = paths.val_list
@@ -657,14 +737,16 @@ def main():
 
     logger = logging.getLogger(__name__)
     c_handler = logging.StreamHandler(sys.stderr)
+    f_path = Path(".", "logs", rt.date_string)
+    f_path.mkdir(parents=True, exist_ok=True)
     if rt.debug:
         logger.setLevel(logging.DEBUG)
-        f_handler = logging.FileHandler(Path(".", "logs", rt.date_string, "debug.log"))
+        f_handler = logging.FileHandler(f_path / "debug.log")
         f_handler.setLevel(logging.DEBUG)
         c_handler.setLevel(logging.DEBUG)
     else:
         logger.setLevel(logging.ERROR)
-        f_handler = logging.FileHandler(Path(".", "logs", rt.date_string, "error.log"))
+        f_handler = logging.FileHandler(f_path / "error.log")
         f_handler.setLevel(logging.ERROR)
         c_handler.setLevel(logging.ERROR)
     log_format = logging.Formatter(
@@ -690,24 +772,34 @@ def main():
             return class_colors[class_map[name]]
 
         filter_dict = {
-            "Ignore*": (get_color("Ignore*"), 0.8, 0.9, None),
+            "None": (class_map["None"], 0.8, 0.9, None),
+            "Ignore*": (class_map["Ignore*"], 0.8, 0.9, None),
         }
-
+        for p in Path(paths.train).glob("**/*." + target_ext):
+            p.unlink()
         create_samples(
             Path(paths.wsi),
             filter_dict,
             prefix="",
             output_dir="../training",
             tile_size=tile_size,
-            duplication_list=get_color("Thrombus"),
+            #duplication_list=class_map["Thrombus"],
         )
+        rewrite_config_flag("clean_start", False)
 
     # Denne liste skal indeholde alle tiles der matcher ID'et fra patient_val_ids
     # bsf burde blive defineret dynamisk.
     # En tilsvarende liste skal genereres for val_ids
     tiles = sorted(Path(paths.train).glob("*." + target_ext))
-    train_ids = [tile.stem for tile in tiles if not tile.stem in patient_val_ids]
-    val_ids = [tile.stem for tile in tiles if tile.stem in patient_val_ids]
+    train_ids = [
+        tile.stem for tile in tiles
+        if not re.match(r'('+'|'.join(patient_val_ids)+r')_[0-9]+', tile.stem)
+    ]
+    val_ids = [
+        tile.stem for tile in tiles
+        if re.match(r'('+'|'.join(patient_val_ids)+r')_[0-9]+', tile.stem)
+    ]
+    logger.debug(f"{tiles[0] = }\n{train_ids[:5] = }")
 
     if len(train_ids) + len(val_ids) != len(tiles):
         raise ValueError(
@@ -762,10 +854,10 @@ def main():
             path="data/WSI/", prefix=""
         )  # , local=False)
     else:
-        train_m = np.array(config["stats"]["train_m"].get())
-        train_s = np.array(config["stats"]["train_s"].get())
-        x_min = np.array(config["stats"]["x_min"].get())
-        x_max = np.array(config["stats"]["x_max"].get())
+        train_m = np.array(config["stats"]["train_m"])
+        train_s = np.array(config["stats"]["train_s"])
+        x_min = np.array(config["stats"]["x_min"])
+        x_max = np.array(config["stats"]["x_max"])
 
     print(
         f"Dataset\n-------\nMean:    {npa2s(train_m, separator=', '):}\n",
@@ -810,20 +902,21 @@ def main():
     # architecture params
 
     # ****  deep learning model
-    batch_size = config["batch_size"].get()
-    inference_tile_size = (1024, 1024)
+    batch_size = config.batch_size
+    inference_tile_size = (2048, 2048)
 
     tb_callback_params = {
         "path": paths.test,
         "color_dict": active_colors,
+        "color_list": colorvec,
         "means": train_m,
         "stds": train_s,
         "x_min": x_min,
         "x_max": x_max,
         "batch_size": 7,
         "dim": tile_size,
-        "n_channels": config["input_meta"]["channels"].get(),
-        "n_classes": config["statics"]["num_cls"].get(),
+        "n_channels": config.input_meta.channels,
+        "n_classes": config.statics.num_cls,
     }
 
     train_params = Parameters(
@@ -834,8 +927,8 @@ def main():
         colors=active_colors,
         batch_size=batch_size,
         dim=tile_size,
-        n_channels=config["input_meta"]["channels"].get(),
-        n_classes=config["statics"]["num_cls"].get(),
+        n_channels=config.input_meta.channels,
+        n_classes=config.statics.num_cls,
         cls_wgts=cls_wgts,
         train_ids=train_ids,
         val_ids=val_ids,
@@ -850,8 +943,8 @@ def main():
         colorvec=colorvec,
         batch_size=batch_size,
         dim=inference_tile_size,
-        n_channels=config["input_meta"]["channels"].get(),
-        n_classes=config["statics"]["num_cls"].get(),
+        n_channels=config.input_meta.channels,
+        n_classes=config.statics.num_cls,
         class_names=active_classes,
         cls_wgts=cls_wgts,
         train_ids=train_ids,
@@ -862,10 +955,11 @@ def main():
         x_min=x_min,
         x_max=x_max,
         colors=active_colors,
+        colorvec=colorvec,
         batch_size=batch_size,
         dim=inference_tile_size,
-        n_channels=config["input_meta"]["channels"].get(),
-        n_classes=config["statics"]["num_cls"].get(),
+        n_channels=config.input_meta.channels,
+        n_classes=config.statics.num_cls,
         class_names=active_classes,
         cls_wgts=cls_wgts,
         train_ids=train_ids,
@@ -878,13 +972,13 @@ def main():
 
     if rt.run_grid_search:
         scan_object = execute_grid_search(
-            config, rt, paths, train_params, tb_callback_params
+            config, rt, paths, train_params, tb_callback_params, logger
         )
 
     if rt.run_train:
         if not sorted(Path(paths.models, rt.date_string).glob("*.h5")):
             _ = execute_single_train(
-                config, rt, paths, train_params, tb_callback_params
+                config, rt, paths, train_params, tb_callback_params, logger
             )
         else:
             logger.info("Training previously completed!")
@@ -910,7 +1004,7 @@ def main():
                 scan_object
             except NameError:
                 scan_object = execute_grid_search(
-                    config, rt, paths, train_params, tb_callback_params
+                    config, rt, paths, train_params, tb_callback_params, logger
                 )
             finally:
                 execute_predict(

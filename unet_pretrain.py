@@ -115,7 +115,7 @@ tb_callback = TensorBoard(
 )
 
 early_stopping = EarlyStopping(
-    monitor="val_loss", min_delta=0.0001, patience=15, verbose=0, mode="auto"
+    monitor="val_loss", min_delta=0.0001, patience=10, verbose=0, mode="auto"
 )
 reduce_lr_on_plateau = ReduceLROnPlateau(
     monitor="val_loss", factor=0.1, patience=5, min_lr=1e-8, verbose=1
