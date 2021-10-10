@@ -12,12 +12,12 @@ Runtime:
   clean_start: false
   compute_stats: false
   compute_class_weights: false
-  date_string: &date "2021-10-03" # if null, always use current date
+  date_string: &date "2021-10-09" # if null, always use current date
   debug: false
   make_abundance_table: false
   run_grid_search: false
   run_train: true
-  run_predict: true
+  run_predict: false
   run_eval: false
   analyze: true
   create_probability_maps: false

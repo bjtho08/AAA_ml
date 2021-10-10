@@ -29,6 +29,7 @@ from tensorflow.keras.optimizers import Adam
 
 # local package
 from tf_mmciad.model.layers import MyConv2D
+from tf_mmciad.utils.f_scores import F1Score
 from tf_mmciad.utils.custom_loss import (
     categorical_focal_loss,
     jaccard1_coef,
@@ -97,6 +98,7 @@ class CustomObjects:
     metrics = {
         "jaccard1_coef": jaccard1_coef,
         "jaccard2_coef": jaccard2_coef,
+        "F1Score": F1Score,
     }
 
     def get(self) -> dict:
@@ -243,7 +245,7 @@ def execute_grid_search(config, rt, paths, params, tb_callback_params, logger: l
     return scan_obj
 
 
-def execute_single_train(config, rt, paths, params, tb_callback_params, logger: logging.Logger):
+def execute_single_train(config, rt, paths, params, tb_callback_params, logger: logging.Logger, error_resume: bool):
     """Execute a single train and return a model and history .
 
     Returns:
@@ -267,6 +269,7 @@ def execute_single_train(config, rt, paths, params, tb_callback_params, logger: 
         debug=rt.debug,
         tensorboard_params=tb_callback_params,
         resume=False,
+        resume_on_error=error_resume,
     )
     if not (dest := Path(paths.models, rt.date_string, "config.yaml")).exists():
         copyfile("config.yaml", dest)
@@ -320,7 +323,10 @@ def execute_predict(
         ranks = [sorted_models.iloc[i].name for i in range(len(sorted_models.index))]
         models = [Path(train_date + "_" + str(i) + ".h5") for i in ranks]
     else:
-        models = sorted(Path(paths.models, train_date).glob("*.h5"))
+        models = [
+            f for f in Path(paths.models, rt.date_string).iterdir()
+            if f.is_dir() and 'model' in str(f)
+            ]
         ranks = [ts.stem[6:] for ts in models]  # strip filepath of prefix and suffix
 
     for modelpath, rank in zip(models, ranks):
@@ -353,7 +359,7 @@ def execute_predict(
                     Adam(), categorical_crossentropy, metrics=["acc", jaccard1_coef]
                 )
             else:
-                test_model = load_model(modelpath, custom_objects=custom_objects.get())
+                test_model = load_model(str(modelpath), custom_objects=custom_objects.get())
             small_batch = 4
             try:
                 for batch in chunked(slide_tiler.items(), small_batch):
@@ -478,6 +484,8 @@ def execute_analysis(
     else:
         pred_m = np.array(config["stats"]["pred_m"])
         pred_s = np.array(config["stats"]["pred_s"])
+        # pred_m = np.array(config["stats"]["train_m"])
+        # pred_s = np.array(config["stats"]["train_s"])
 
     print(
         f"Dataset\n-------\nMean:    {npa2s(pred_m, separator=', '):}\n",
@@ -488,7 +496,8 @@ def execute_analysis(
     tmp_path = Path(paths.data, "tmp")
     input_files = sorted(Path(paths.analysis).glob("*.tif"))
 
-    model_path = next(Path(paths.models, model_date).glob("*val_jacc1*.h5"))
+    #model_path = next(Path(paths.models, model_date).glob("*val_jacc1*.h5"))
+    model_path = Path(paths.models, model_date, "saved_model")
 
     for input_path in input_files:
         input_name = get_filename(input_path)
@@ -504,14 +513,19 @@ def execute_analysis(
         tmp_slide_path = tmp_path / "results" / f"{model_date}.png"
         sys.stderr.flush()
 
-        analysis_model = load_model(model_path, custom_objects=custom_objects.get())
+        #analysis_model = load_model(model_path, custom_objects=custom_objects.get())
+        logger.info(f"{model_path = }")
+        custom_objs = custom_objects.get()
+        analysis_model = load_model(str(model_path), custom_objects=custom_objs)
         small_batch = 4
         try:
             for batch in chunked(slide_tiler.items(), small_batch):
-                img_batch = np.array([imread(fp) for (fp, _) in batch])
+                img_batch = np.array([(imread(fp) - pred_m) / pred_s for (fp, _) in batch])
                 pred_done = False
                 prediction = analysis_model.predict(img_batch)
                 pred_done = True
+                mini_tile = prediction[0, :256, :256]
+                #continue
                 for (save_path, _), pred_tile in zip(batch, prediction):
                     tifffile.imwrite(
                         save_path,
@@ -536,6 +550,7 @@ def execute_analysis(
             for key, val in metadata.items():
                 logger.debug(f"img_batch.{key} = {val}")
             raise err from None
+        # continue
         if not output_path.is_file() and pred_done:
             # logger.info("Writing to tmp directory ...")
             img_assembler = ImageAssembler(tmp_slide_path, slide_tiler)
@@ -745,10 +760,10 @@ def main():
         f_handler.setLevel(logging.DEBUG)
         c_handler.setLevel(logging.DEBUG)
     else:
-        logger.setLevel(logging.ERROR)
+        logger.setLevel(logging.INFO)
         f_handler = logging.FileHandler(f_path / "error.log")
-        f_handler.setLevel(logging.ERROR)
-        c_handler.setLevel(logging.ERROR)
+        f_handler.setLevel(logging.INFO)
+        c_handler.setLevel(logging.INFO)
     log_format = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s: %(message)s",
         datefmt="%d/%m/%Y %H:%M:%S",
@@ -903,7 +918,7 @@ def main():
 
     # ****  deep learning model
     batch_size = config.batch_size
-    inference_tile_size = (2048, 2048)
+    inference_tile_size = (1024, 1024)
 
     tb_callback_params = {
         "path": paths.test,
@@ -976,9 +991,17 @@ def main():
         )
 
     if rt.run_train:
-        if not sorted(Path(paths.models, rt.date_string).glob("*.h5")):
+        if not [
+            f for f in Path(paths.models, rt.date_string).iterdir()
+            if f.is_dir() and 'model' in str(f)
+            ]:
             _ = execute_single_train(
-                config, rt, paths, train_params, tb_callback_params, logger
+                config, rt, paths, train_params, tb_callback_params, logger, False
+            )
+        elif not Path(paths.models, rt.date_string, "saved_model").exists():
+            logger.info("Saved_model does not exist. Retrying...")
+            _ = execute_single_train(
+                config, rt, paths, train_params, tb_callback_params, logger, True
             )
         else:
             logger.info("Training previously completed!")

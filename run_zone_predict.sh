@@ -13,7 +13,7 @@ pyenv shell 3.8.2
 export TF_CPP_MIN_LOG_LEVEL=1
 export TF_KERAS=1
 
-tmux neww -d 
+tmux set-option history-limit 5000 neww -d 
 
 COMMAND="python AAA_zone_predict.py"
 EXIT_CODE=1
