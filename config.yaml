@@ -17,25 +17,25 @@ Runtime:
   make_abundance_table: false
   run_grid_search: false
   run_train: true
-  run_predict: false
+  run_predict: true
   run_eval: false
-  analyze: true
+  analyze: false
   create_probability_maps: false
 
 data:
   input_ext:  "tif"
   target_ext: "png"
-  data:       "data/"
-  wsi:        "data/WSI/"
-  train:      "data/training/"
-  val:        "data/validation/"
-  test:       "data/testing/"
-  analysis:    "data/analysis"
-  models:     "models/"
-  weights:    "weights/"
-  logs:       "logs/"
-  results:    "results/"
-  grid:       "talos/"
+  data:       "/nb_projects/AAA_ml/data/"
+  wsi:        "/nb_projects/AAA_ml/data/WSI/"
+  train:      "/nb_projects/AAA_ml/data/training/"
+  val:        "/nb_projects/AAA_ml/data/validation/"
+  test:       "/nb_projects/AAA_ml/data/testing/"
+  analysis:   "/nb_projects/AAA_ml/data/analysis"
+  models:     "/nb_projects/AAA_ml/models/"
+  weights:    "/nb_projects/AAA_ml/weights/"
+  logs:       "/nb_projects/AAA_ml/logs/"
+  results:    "/nb_projects/AAA_ml/results/"
+  grid:       "/nb_projects/AAA_ml/talos/"
   val_list:
     - "3295 5V AAA WEIGERT - 2020-02-27 17.20.54"
     - "4458 5V AAA WEIGERT - 2020-02-27 18.29.59"

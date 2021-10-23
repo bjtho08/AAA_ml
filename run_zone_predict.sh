@@ -15,7 +15,7 @@ export TF_KERAS=1
 
 tmux set-option history-limit 5000 neww -d 
 
-COMMAND="python AAA_zone_predict.py"
+COMMAND="python lib"
 EXIT_CODE=1
 BREAK_LOOP="$1"
 (while [ $EXIT_CODE -gt 0 ]; do
