@@ -8,12 +8,11 @@
 *.orig
 *.log
 *.pot
-.mypy_cache/*
 __pycache__/*
 .cache/*
 .*.swp
 */.ipynb_checkpoints/*
-.ipynb_checkpoints/*
+.DS_Store
 
 # Project files
 .ropeproject
@@ -21,8 +20,8 @@ __pycache__/*
 .pydevproject
 .settings
 .idea
+.vscode
 tags
-.vscode/*
 
 # Package files
 *.egg
@@ -33,8 +32,9 @@ tags
 # Unittest and coverage
 htmlcov/*
 .coverage
+.coverage.*
 .tox
-junit.xml
+junit*.xml
 coverage.xml
 .pytest_cache/
 
@@ -50,13 +50,5 @@ MANIFEST
 
 # Per-project virtualenvs
 .venv*/
-
-# model-specific and logs
-data/*
-logs/*
-models/*
-results/*
-talos/*
-weights/*
-"old notebooks"/*
-old\ notebooks/*
+.conda*/
+.python-version

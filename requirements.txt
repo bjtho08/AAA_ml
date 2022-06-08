@@ -1,0 +1,26 @@
+# =============================================================================
+# DEPRECATION WARNING:
+#
+# The file `requirements.txt` does not influence the package dependencies and
+# will not be automatically created in the next version of PyScaffold (v4.x).
+#
+# Please have look at the docs for better alternatives
+# (`Dependency Management` section).
+# =============================================================================
+#
+# Add your pinned requirements so that they can be easily installed with:
+# pip install -r requirements.txt
+# Remember to also add them in setup.cfg but unpinned.
+# Example:
+confuse==1.5.0
+cupy>=7.8
+imgaug>=0.4.0
+numpy>=1.20.3
+matplotlib>=3.2.2
+pillow>=8.3.2
+scikit-image>=0.17.1
+scikit-learn>=0.23.0
+talos==1.0.1
+tensorflow>=2.3.1
+tifffile>=2021.4.8
+tqdm>=4.46.0
