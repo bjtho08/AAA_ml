@@ -152,7 +152,7 @@ def main():
     }
 
     config = confuse.Configuration("AAAml", __name__)
-    config.set_file("/nb_projects/AAA_ml/config.yaml")
+    config.set_file("../../config.yaml")
     config = config.get(template)
 
     # if date_string is None, current date will be used
